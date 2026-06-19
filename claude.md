@@ -6,6 +6,18 @@
 
 ---
 
+## 문서 참조
+
+> 아래 문서를 먼저 읽고 작업하라. 코드 작성 전 요구사항·스키마·디자인 규칙을 반드시 확인한다.
+
+| 문서 | 경로 | 설명 |
+|------|------|------|
+| 요구사항 명세서 | [`docs/spec/spec-fixed.md`](docs/spec/spec-fixed.md) | REQ-001~015 기능 요구사항 전체 |
+| 데이터베이스 스키마 | [`docs/database/schema.md`](docs/database/schema.md) | 테이블 정의, RLS, ERD, DDL 전문 |
+| 디자인 시스템 | [`docs/design/design-system.md`](docs/design/design-system.md) | 컬러·타이포·컴포넌트·레이아웃 규칙 |
+
+---
+
 ## 기술 스택
 
 | 레이어 | 기술 |
@@ -47,111 +59,23 @@ src/
 
 ## Supabase 데이터베이스 스키마
 
-### `profiles` — 회원 정보 (auth.users 확장)
+> 전체 DDL, ERD, RLS 정책은 [`docs/database/schema.md`](docs/database/schema.md) 참조.
 
-```sql
-create table profiles (
-  id          uuid primary key references auth.users(id) on delete cascade,
-  name        text not null,
-  email       text not null,
-  phone       text,
-  role        text not null default 'user',   -- 'user' | 'admin'
-  avatar_url  text,
-  created_at  timestamptz default now(),
-  updated_at  timestamptz default now()
-);
+### 테이블 요약
 
--- RLS
-alter table profiles enable row level security;
-create policy "본인 프로필 조회/수정" on profiles
-  using (auth.uid() = id);
-create policy "관리자 전체 조회" on profiles
-  using (exists (
-    select 1 from profiles where id = auth.uid() and role = 'admin'
-  ));
-```
+| 테이블 | 설명 | 주요 관계 |
+|--------|------|-----------|
+| `profiles` | 회원 정보 (auth.users 확장) | auth.users 1:1, CASCADE 삭제 |
+| `products` | 제품 소개 | 관리자만 쓰기, 전체 공개 읽기 |
+| `inquiries` | 온라인 문의 | profiles 1:N (user_id nullable — 비회원 허용) |
+| `posts` | 커뮤니티 게시판 | profiles 1:N, CASCADE 삭제 |
 
-### `products` — 제품 소개
+### RLS 핵심 규칙
 
-```sql
-create table products (
-  id           uuid primary key default gen_random_uuid(),
-  title        text not null,
-  slug         text not null unique,
-  summary      text,
-  description  text,
-  image_url    text,
-  category     text,
-  is_featured  boolean default false,
-  order_index  integer default 0,
-  created_at   timestamptz default now(),
-  updated_at   timestamptz default now()
-);
-
--- 공개 읽기 허용, 관리자만 쓰기
-alter table products enable row level security;
-create policy "전체 공개 읽기" on products for select using (true);
-create policy "관리자 쓰기" on products for all
-  using (exists (
-    select 1 from profiles where id = auth.uid() and role = 'admin'
-  ));
-```
-
-### `inquiries` — 온라인 문의
-
-```sql
-create table inquiries (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid references profiles(id) on delete set null,
-  name        text not null,
-  email       text not null,
-  phone       text,
-  category    text not null,   -- '제품문의' | '견적요청' | '기타'
-  title       text not null,
-  content     text not null,
-  status      text default 'pending',  -- 'pending' | 'in_progress' | 'resolved'
-  answer      text,
-  answered_at timestamptz,
-  created_at  timestamptz default now()
-);
-
-alter table inquiries enable row level security;
-create policy "본인 문의 조회" on inquiries for select
-  using (auth.uid() = user_id);
-create policy "문의 등록 (비회원 포함)" on inquiries for insert
-  with check (true);
-create policy "관리자 전체 조회/수정" on inquiries for all
-  using (exists (
-    select 1 from profiles where id = auth.uid() and role = 'admin'
-  ));
-```
-
-### `posts` — 커뮤니티 게시판
-
-```sql
-create table posts (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid references profiles(id) on delete cascade,
-  board       text not null default 'general',  -- 'notice' | 'general' | 'qna'
-  title       text not null,
-  content     text not null,
-  is_pinned   boolean default false,
-  view_count  integer default 0,
-  created_at  timestamptz default now(),
-  updated_at  timestamptz default now()
-);
-
-alter table posts enable row level security;
-create policy "전체 읽기" on posts for select using (true);
-create policy "로그인 사용자 작성" on posts for insert
-  with check (auth.uid() = user_id);
-create policy "본인 글 수정/삭제" on posts for update, delete
-  using (auth.uid() = user_id);
-create policy "관리자 전체 관리" on posts for all
-  using (exists (
-    select 1 from profiles where id = auth.uid() and role = 'admin'
-  ));
-```
+- **profiles**: 본인만 조회·수정 / 관리자 전체 조회
+- **products**: 전체 공개 읽기 / 관리자만 쓰기
+- **inquiries**: 본인 문의만 조회 / 누구나 INSERT / 관리자 전체 관리
+- **posts**: 전체 읽기 / 로그인 사용자 작성 / 본인·관리자 수정·삭제
 
 ---
 
