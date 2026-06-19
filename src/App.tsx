@@ -13,6 +13,7 @@ import CommunityPage from './pages/community/CommunityPage'
 import PostDetailPage from './pages/community/PostDetailPage'
 import PostWritePage from './pages/community/PostWritePage'
 import LoginPage from './pages/auth/LoginPage'
+import LoginCompletePage from './pages/auth/LoginCompletePage'
 import RegisterPage from './pages/auth/RegisterPage'
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
 import MyPage from './pages/mypage/MyPage'
@@ -40,6 +41,7 @@ function AppInner() {
         <Route path="/community/:board" element={<CommunityPage />} />
         <Route path="/community/:board/:id" element={<PostDetailPage />} />
         <Route path="/auth/login" element={<LoginPage />} />
+        <Route path="/auth/login/complete" element={<LoginCompletePage />} />
         <Route path="/auth/register" element={<RegisterPage />} />
         <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
 
